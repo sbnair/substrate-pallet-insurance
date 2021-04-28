@@ -33,6 +33,8 @@ decl_error! {
         NoSuchProof,
         /// The proof is claimed by another account, so caller can't revoke it.
         NotProofOwner,
+        /// Values mismatch.
+        ValuesMismatch,
     }
 }
 
@@ -56,6 +58,29 @@ decl_module! {
 
         // Events must be initialized if they are used by the pallet.
         fn deposit_event() = default;
+
+		/// Allow a user to fine claim.
+        #[weight = 10_000]
+        fn get_reimbursement(origin, proof: Vec<u8>, value: u128, teacher: Vec<u8>, student: Vec<u8>,
+        teacher_signature: Vec<u8>, employer_address: Vec<u8>, student_signature: Vec<u8>) {
+            // Check that the extrinsic was signed and get the signer.
+            // This function will return an error if the extrinsic is not signed.
+            // https://substrate.dev/docs/en/knowledgebase/runtime/origin
+            let sender = ensure_signed(origin)?;
+
+            // Verify that the specified proof has not already been claimed.
+            ensure!(!Proofs::<T>::contains_key(&proof), Error::<T>::ProofAlreadyClaimed);
+
+            // Get the block number from the FRAME System module.
+            let current_block = <frame_system::Module<T>>::block_number();
+
+            // Store the proof with the sender and block number.
+            Proofs::<T>::insert(&proof, (&sender, current_block));
+
+            // Emit an event that the claim was created.
+            Self::deposit_event(RawEvent::ClaimCreated(sender, proof));
+        }
+
 
         /// Allow a user to claim ownership of an unclaimed proof.
         #[weight = 10_000]
